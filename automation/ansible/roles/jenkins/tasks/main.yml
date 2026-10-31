@@ -1,0 +1,153 @@
+---
+- name: Check required settings are present
+  ansible.builtin.assert:
+    that:
+      - jenkins_url | length > 0
+      - jenkins_github_repo_url | length > 0
+      - jenkins_dockerhub_user | length > 0
+      - jenkins_dockerhub_repo | length > 0
+      - jenkins_notify_email | length > 0
+      - jenkins_smtp_user | length > 0
+      - jenkins_kubeconfig_src | length > 0
+      - jenkins_secrets.jenkins_admin_password | length > 0
+      - jenkins_secrets.dockerhub_token | length > 0
+      - jenkins_secrets.nvd_api_key | length > 0
+      - jenkins_secrets.smtp_password | length > 0
+      - jenkins_secrets.finsecure_api_key | length > 0
+    fail_msg: "Missing configuration. Run ./finsecure.sh 0 (setup) and fill in config.env / secrets.env."
+    quiet: true
+
+- name: Check the Jenkins kubeconfig exists (created by ./finsecure.sh 3)
+  ansible.builtin.stat:
+    path: "{{ jenkins_kubeconfig_src }}"
+  register: jenkins_kubeconfig_stat
+  delegate_to: localhost
+  become: false
+
+- name: Fail if the Jenkins kubeconfig is missing
+  ansible.builtin.fail:
+    msg: "{{ jenkins_kubeconfig_src }} not found. Run Task 3 step 2 first (creates the namespace-scoped Jenkins identity)."
+  when: not jenkins_kubeconfig_stat.stat.exists
+
+- name: Create Jenkins directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ jenkins_base_dir }}/build", owner: "root", mode: "0755" }
+    - { path: "{{ jenkins_base_dir }}/casc", owner: "root", mode: "0755" }
+    - { path: "{{ jenkins_base_dir }}/secrets", owner: "1000", mode: "0700" }
+    - { path: "{{ jenkins_home }}", owner: "1000", mode: "0755" }
+
+- name: Write the Jenkins image definition
+  ansible.builtin.template:
+    src: Dockerfile.j2
+    dest: "{{ jenkins_base_dir }}/build/Dockerfile"
+    mode: "0644"
+  register: jenkins_dockerfile
+
+- name: Copy the plugin list
+  ansible.builtin.copy:
+    src: plugins.txt
+    dest: "{{ jenkins_base_dir }}/build/plugins.txt"
+    mode: "0644"
+  register: jenkins_plugins
+
+- name: Write the Configuration-as-Code file
+  ansible.builtin.template:
+    src: jenkins.yaml.j2
+    dest: "{{ jenkins_base_dir }}/casc/jenkins.yaml"
+    mode: "0644"
+  register: jenkins_casc
+
+- name: Write secret files (readable only by the Jenkins user)
+  ansible.builtin.copy:
+    content: "{{ item.value }}"
+    dest: "{{ jenkins_base_dir }}/secrets/{{ item.key }}"
+    owner: "1000"
+    group: "1000"
+    mode: "0400"
+  loop: "{{ jenkins_secrets | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+  register: jenkins_secret_files
+
+- name: Install the namespace-scoped kubeconfig
+  ansible.builtin.copy:
+    src: "{{ jenkins_kubeconfig_src }}"
+    dest: "{{ jenkins_base_dir }}/secrets/kubeconfig"
+    owner: "1000"
+    group: "1000"
+    mode: "0400"
+  register: jenkins_kubeconfig
+
+- name: Look up the docker group id (lets Jenkins use the host Docker daemon)
+  ansible.builtin.command: getent group docker
+  register: jenkins_docker_group
+  changed_when: false
+
+- name: Record the current Jenkins image id
+  ansible.builtin.command: docker images -q {{ jenkins_image }}
+  register: jenkins_image_before
+  changed_when: false
+
+- name: Build the Jenkins image (first build downloads plugins, ~3-5 minutes)
+  ansible.builtin.command: docker build --pull -t {{ jenkins_image }} {{ jenkins_base_dir }}/build
+  register: jenkins_build
+  changed_when: false
+  when: jenkins_image_before.stdout | length == 0 or jenkins_dockerfile.changed or jenkins_plugins.changed or (jenkins_rebuild | default(false) | bool)
+
+- name: Record the new Jenkins image id
+  ansible.builtin.command: docker images -q {{ jenkins_image }}
+  register: jenkins_image_after
+  changed_when: false
+
+- name: Check whether the Jenkins container is running
+  ansible.builtin.command: docker ps -q --filter name=^{{ jenkins_container }}$
+  register: jenkins_running
+  changed_when: false
+
+- name: Decide whether Jenkins must be (re)created
+  ansible.builtin.set_fact:
+    jenkins_recreate: >-
+      {{ jenkins_running.stdout | length == 0
+         or jenkins_image_before.stdout != jenkins_image_after.stdout
+         or jenkins_casc.changed or jenkins_secret_files.changed or jenkins_kubeconfig.changed }}
+
+- name: Start Jenkins
+  when: jenkins_recreate | bool
+  ansible.builtin.shell: |
+    docker rm -f {{ jenkins_container }} >/dev/null 2>&1 || true
+    docker run -d --name {{ jenkins_container }} --restart unless-stopped \
+      -p {{ jenkins_bind_address }}:{{ jenkins_port }}:8080 \
+      --group-add {{ jenkins_docker_group.stdout.split(':')[2] }} \
+      -e CASC_JENKINS_CONFIG=/var/jenkins_casc/jenkins.yaml \
+      -e JAVA_OPTS={{ jenkins_java_opts | quote }} \
+      -v {{ jenkins_home }}:{{ jenkins_home }} \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -v {{ jenkins_base_dir }}/casc:/var/jenkins_casc:ro \
+      -v {{ jenkins_base_dir }}/secrets:/run/secrets:ro \
+      {{ jenkins_image }}
+  args:
+    executable: /bin/bash
+  changed_when: true
+
+- name: Wait for Jenkins to come up
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ jenkins_port }}/login"
+    status_code: 200
+  register: jenkins_up
+  until: jenkins_up.status == 200
+  retries: 60
+  delay: 5
+
+- name: Jenkins is ready
+  ansible.builtin.debug:
+    msg:
+      - "Jenkins URL : {{ jenkins_url }}"
+      - "User        : {{ jenkins_admin_user }} (password from automation/secrets.env)"
+      - "Pipeline job: finsecure-pay (polls {{ jenkins_github_repo_url }} every ~2 minutes)"

@@ -1,0 +1,14 @@
+---
+# FinSecure Pay - control machine provisioning
+#   base    : Docker, Java 21, Git, AWS CLI v2, eksctl, kubectl, Helm, GitHub CLI
+#   jenkins : Jenkins LTS in Docker, plugins and full configuration as code (JCasC)
+# Run through ./finsecure.sh (it exports the required variables), e.g.
+#   ansible-playbook site.yml --tags base -K
+- name: Provision the FinSecure Pay control machine
+  hosts: control
+  become: true
+  roles:
+    - role: base
+      tags: [base]
+    - role: jenkins
+      tags: [jenkins]

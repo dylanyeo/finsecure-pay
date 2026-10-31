@@ -1,0 +1,39 @@
+---
+# Non-secret settings come from automation/config.env (exported by finsecure.sh)
+jenkins_image: finsecure-jenkins:local
+jenkins_container: jenkins
+jenkins_port: "{{ lookup('ansible.builtin.env', 'JENKINS_PORT') | default('8080', true) }}"
+jenkins_bind_address: "{{ lookup('ansible.builtin.env', 'JENKINS_BIND_ADDRESS') | default('0.0.0.0', true) }}"
+jenkins_url: "{{ lookup('ansible.builtin.env', 'JENKINS_URL') }}"
+jenkins_admin_user: "{{ lookup('ansible.builtin.env', 'JENKINS_ADMIN_USER') | default('admin', true) }}"
+jenkins_home: /var/jenkins_home          # bind-mounted at the SAME path so docker run -v $WORKSPACE works
+jenkins_base_dir: /opt/finsecure/jenkins
+jenkins_kubectl_minor: "1.34"   # overridden by finsecure.sh with the EKS server version
+# Relaxed Content-Security-Policy so the HTML test/coverage/security reports render inside Jenkins
+jenkins_csp: >-
+  sandbox allow-scripts allow-same-origin; default-src 'self';
+  script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
+jenkins_java_opts: >-
+  -Djenkins.install.runSetupWizard=false
+  -Duser.timezone=Asia/Singapore
+  -Dhudson.model.DirectoryBrowserSupport.CSP="{{ jenkins_csp }}"
+
+jenkins_github_repo_url: "{{ lookup('ansible.builtin.env', 'GITHUB_REPO_URL') }}"
+jenkins_dockerhub_user: "{{ lookup('ansible.builtin.env', 'DOCKERHUB_USER') }}"
+jenkins_dockerhub_repo: "{{ lookup('ansible.builtin.env', 'DOCKERHUB_REPO') }}"
+jenkins_sonar_enabled: "{{ lookup('ansible.builtin.env', 'SONAR_ENABLED') | default('true', true) }}"
+jenkins_sonar_org: "{{ lookup('ansible.builtin.env', 'SONAR_ORG') }}"
+jenkins_sonar_project_key: "{{ lookup('ansible.builtin.env', 'SONAR_PROJECT_KEY') }}"
+jenkins_notify_email: "{{ lookup('ansible.builtin.env', 'NOTIFY_EMAIL') }}"
+jenkins_smtp_user: "{{ lookup('ansible.builtin.env', 'SMTP_USER') }}"
+jenkins_kubeconfig_src: "{{ lookup('ansible.builtin.env', 'JENKINS_KUBECONFIG_FILE') }}"
+
+# Secrets: read from the environment (automation/secrets.env), written to root-only files
+# that are mounted read-only into the container at /run/secrets. Never templated into YAML.
+jenkins_secrets:
+  jenkins_admin_password: "{{ lookup('ansible.builtin.env', 'JENKINS_ADMIN_PASSWORD') }}"
+  dockerhub_token: "{{ lookup('ansible.builtin.env', 'DOCKERHUB_TOKEN') }}"
+  sonar_token: "{{ lookup('ansible.builtin.env', 'SONAR_TOKEN') | default('not-configured', true) }}"
+  nvd_api_key: "{{ lookup('ansible.builtin.env', 'NVD_API_KEY') }}"
+  smtp_password: "{{ lookup('ansible.builtin.env', 'SMTP_PASSWORD') }}"
+  finsecure_api_key: "{{ lookup('ansible.builtin.env', 'FINSECURE_API_KEY') }}"

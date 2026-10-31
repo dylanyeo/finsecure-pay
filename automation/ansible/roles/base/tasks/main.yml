@@ -1,0 +1,190 @@
+---
+- name: Check the operating system is supported
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['architecture'] == 'x86_64'
+    fail_msg: "This playbook supports Ubuntu (22.04/24.04) on x86_64. Images built on ARM will not run on standard cloud nodes."
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - git
+      - jq
+      - unzip
+      - gettext-base          # envsubst, used to render Kubernetes manifests
+      - openjdk-21-jdk-headless
+      - apt-transport-https
+      - python3-debian        # required by deb822_repository
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# ---------------------------------------------------------------- Docker Engine
+- name: Add the Docker apt repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: [deb]
+    uris: https://download.docker.com/linux/ubuntu
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [stable]
+    architectures: [amd64]
+    signed_by: https://download.docker.com/linux/ubuntu/gpg
+
+- name: Install Docker Engine
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+
+- name: Start and enable Docker
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Allow the operator to use Docker without sudo
+  ansible.builtin.user:
+    name: "{{ base_target_user }}"
+    groups: docker
+    append: true
+  when: base_target_user | length > 0 and base_target_user != 'root'
+
+# ---------------------------------------------------------------- AWS CLI v2
+- name: Check for the AWS CLI
+  ansible.builtin.command: aws --version
+  register: base_aws_current
+  changed_when: false
+  failed_when: false
+
+- name: Install the AWS CLI v2
+  when: base_aws_current.rc != 0
+  block:
+    - name: Download the AWS CLI v2
+      ansible.builtin.get_url:
+        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp/awscliv2.zip
+        mode: "0644"
+
+    - name: Unpack the AWS CLI
+      ansible.builtin.unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp
+        remote_src: true
+
+    - name: Run the AWS CLI installer
+      ansible.builtin.command: /tmp/aws/install --update
+      changed_when: true
+
+# ---------------------------------------------------------------- eksctl
+- name: Check the installed eksctl version
+  ansible.builtin.command: eksctl version
+  register: base_eksctl_current
+  changed_when: false
+  failed_when: false
+
+- name: Install eksctl
+  when: base_eksctl_current.rc != 0 or (base_eksctl_version | regex_replace('^v', '')) not in base_eksctl_current.stdout
+  block:
+    - name: Download eksctl (checksum verified)
+      ansible.builtin.get_url:
+        url: "https://github.com/eksctl-io/eksctl/releases/download/{{ base_eksctl_version }}/eksctl_Linux_amd64.tar.gz"
+        dest: /tmp/eksctl_Linux_amd64.tar.gz
+        checksum: "sha256:https://github.com/eksctl-io/eksctl/releases/download/{{ base_eksctl_version }}/eksctl_checksums.txt"
+        mode: "0644"
+
+    - name: Install the eksctl binary
+      ansible.builtin.unarchive:
+        src: /tmp/eksctl_Linux_amd64.tar.gz
+        dest: /usr/local/bin
+        remote_src: true
+        mode: "0755"
+
+# ---------------------------------------------------------------- kubectl
+- name: Add the Kubernetes apt repository
+  ansible.builtin.deb822_repository:
+    name: kubernetes
+    types: [deb]
+    uris: "https://pkgs.k8s.io/core:/stable:/{{ base_kubectl_minor }}/deb/"
+    suites: ["/"]
+    signed_by: "https://pkgs.k8s.io/core:/stable:/{{ base_kubectl_minor }}/deb/Release.key"
+
+- name: Install kubectl
+  ansible.builtin.apt:
+    name: kubectl
+    state: present
+    update_cache: true
+
+# ---------------------------------------------------------------- Helm
+- name: Check the installed Helm version
+  ansible.builtin.command: helm version --template "{{ '{{' }} .Version {{ '}}' }}"
+  register: base_helm_current
+  changed_when: false
+  failed_when: false
+
+- name: Install Helm
+  when: base_helm_current.rc != 0 or base_helm_current.stdout != base_helm_version
+  block:
+    - name: Download Helm (checksum verified)
+      ansible.builtin.get_url:
+        url: "https://get.helm.sh/helm-{{ base_helm_version }}-linux-amd64.tar.gz"
+        dest: "/tmp/helm-{{ base_helm_version }}.tar.gz"
+        checksum: "sha256:https://get.helm.sh/helm-{{ base_helm_version }}-linux-amd64.tar.gz.sha256sum"
+        mode: "0644"
+
+    - name: Unpack Helm
+      ansible.builtin.unarchive:
+        src: "/tmp/helm-{{ base_helm_version }}.tar.gz"
+        dest: /tmp
+        remote_src: true
+
+    - name: Install the Helm binary
+      ansible.builtin.copy:
+        src: /tmp/linux-amd64/helm
+        dest: /usr/local/bin/helm
+        mode: "0755"
+        remote_src: true
+
+# ---------------------------------------------------------------- GitHub CLI
+- name: Add the GitHub CLI apt repository
+  ansible.builtin.deb822_repository:
+    name: github-cli
+    types: [deb]
+    uris: https://cli.github.com/packages
+    suites: [stable]
+    components: [main]
+    architectures: [amd64]
+    signed_by: https://cli.github.com/packages/githubcli-archive-keyring.gpg
+
+- name: Install the GitHub CLI
+  ansible.builtin.apt:
+    name: gh
+    state: present
+    update_cache: true
+
+- name: Show installed tool versions
+  ansible.builtin.shell: |
+    set -o pipefail
+    echo "docker : $(docker --version)"
+    echo "java   : $(java -version 2>&1 | head -n 1)"
+    echo "aws    : $(aws --version)"
+    echo "eksctl : $(eksctl version)"
+    echo "kubectl: $(kubectl version --client 2>/dev/null | head -n 1)"
+    echo "helm   : $(helm version --short)"
+    echo "gh     : $(gh --version | head -n 1)"
+  args:
+    executable: /bin/bash
+  register: base_versions
+  changed_when: false
+
+- name: Installed versions
+  ansible.builtin.debug:
+    var: base_versions.stdout_lines

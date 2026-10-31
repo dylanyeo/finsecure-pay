@@ -1,0 +1,28 @@
+# Jenkins LTS + the CLI tools the pipeline needs. Managed by Ansible - do not edit by hand.
+FROM jenkins/jenkins:lts-jdk21
+
+USER root
+ARG KUBECTL_MINOR={{ jenkins_kubectl_minor }}
+
+# Docker CLI (talks to the host Docker daemon through the mounted socket), envsubst, jq, unzip
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl gnupg unzip jq gettext-base \
+ && install -m 0755 -d /etc/apt/keyrings \
+ && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
+ && chmod a+r /etc/apt/keyrings/docker.asc \
+ && . /etc/os-release \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian ${VERSION_CODENAME} stable" \
+      > /etc/apt/sources.list.d/docker.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin \
+ && rm -rf /var/lib/apt/lists/*
+
+# kubectl matching the EKS control-plane minor version (checksum verified)
+RUN KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable-${KUBECTL_MINOR}.txt)" \
+ && curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+ && echo "$(curl -fsSL https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256)  /usr/local/bin/kubectl" | sha256sum -c - \
+ && chmod 0755 /usr/local/bin/kubectl
+
+USER jenkins
+COPY --chown=jenkins:jenkins plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt

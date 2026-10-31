@@ -1,0 +1,106 @@
+# Jenkins Configuration as Code (JCasC). Managed by Ansible - do not edit by hand.
+# Secrets are read from files in /run/secrets (mounted read-only); none appear in this file.
+jenkins:
+  systemMessage: "FinSecure Pay CI/CD - configured as code (JCasC). Changes made in the UI are overwritten on restart."
+  numExecutors: 2
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "{{ jenkins_admin_user }}"
+          password: "${readFile:/run/secrets/jenkins_admin_password}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: "DOCKERHUB_REPO"
+            value: "{{ jenkins_dockerhub_repo }}"
+          - key: "SONAR_ENABLED"
+            value: "{{ jenkins_sonar_enabled }}"
+          - key: "SONAR_ORG"
+            value: "{{ jenkins_sonar_org }}"
+          - key: "SONAR_PROJECT_KEY"
+            value: "{{ jenkins_sonar_project_key }}"
+          - key: "NOTIFY_EMAIL"
+            value: "{{ jenkins_notify_email }}"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: "dockerhub-credentials"
+              description: "Docker Hub access token (push images)"
+              username: "{{ jenkins_dockerhub_user }}"
+              password: "${readFile:/run/secrets/dockerhub_token}"
+          - string:
+              scope: GLOBAL
+              id: "sonar-token"
+              description: "SonarQube Cloud analysis token"
+              secret: "${readFile:/run/secrets/sonar_token}"
+          - string:
+              scope: GLOBAL
+              id: "nvd-api-key"
+              description: "NVD API key for OWASP Dependency-Check"
+              secret: "${readFile:/run/secrets/nvd_api_key}"
+          - string:
+              scope: GLOBAL
+              id: "finsecure-api-key"
+              description: "FinSecure Pay API key (smoke tests)"
+              secret: "${readFile:/run/secrets/finsecure_api_key}"
+          - file:
+              scope: GLOBAL
+              id: "finsecure-kubeconfig"
+              description: "Namespace-scoped kubeconfig for the jenkins-deployer service account"
+              fileName: "kubeconfig"
+              secretBytes: "${readFileBase64:/run/secrets/kubeconfig}"
+          - usernamePassword:
+              scope: GLOBAL
+              id: "smtp-credentials"
+              description: "SMTP account for build notifications"
+              username: "{{ jenkins_smtp_user }}"
+              password: "${readFile:/run/secrets/smtp_password}"
+
+unclassified:
+  location:
+    url: "{{ jenkins_url }}"
+    adminAddress: "FinSecure Jenkins <{{ jenkins_smtp_user }}>"
+  email-ext:
+    mailAccount:
+      smtpHost: "smtp.gmail.com"
+      smtpPort: "465"
+      credentialsId: "smtp-credentials"
+      useSsl: true
+    defaultContentType: "text/html"
+    defaultRecipients: "{{ jenkins_notify_email }}"
+    defaultReplyTo: "{{ jenkins_smtp_user }}"
+
+jobs:
+  - script: |
+      pipelineJob('finsecure-pay') {
+        description('FinSecure Pay: build, test, scan, containerise and deploy to AWS EKS. Pipeline defined in the repository Jenkinsfile.')
+        logRotator { numToKeep(30) }
+        properties {
+          pipelineTriggers {
+            triggers {
+              pollSCM { scmpoll_spec('H/2 * * * *') }
+            }
+          }
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote { url('{{ jenkins_github_repo_url }}') }
+                branch('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+            lightweight(true)
+          }
+        }
+      }

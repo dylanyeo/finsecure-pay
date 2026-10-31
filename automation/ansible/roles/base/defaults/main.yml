@@ -1,0 +1,6 @@
+---
+base_helm_version: v4.3.1
+base_eksctl_version: v0.231.0
+base_kubectl_minor: "v1.34"        # match the EKS version in config.env (kubectl supports +/- 1 minor)
+# User that will run docker without sudo (the user who started finsecure.sh)
+base_target_user: "{{ lookup('ansible.builtin.env', 'FINSECURE_USER') | default(lookup('ansible.builtin.env', 'USER'), true) }}"
