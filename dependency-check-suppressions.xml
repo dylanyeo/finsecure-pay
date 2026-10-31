@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OWASP Dependency-Check suppressions.
+  Only add an entry after a finding has been reviewed and confirmed as a false positive or as not
+  exploitable in this application. Every suppression needs a reason and an expiry date (until=...),
+  so accepted risks are revisited instead of being hidden forever.
+
+  Example:
+  <suppress until="2026-12-31Z">
+     <notes>False positive: CVE applies to the Tomcat AJP connector, which this service does not enable.</notes>
+     <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/tomcat\-embed\-core@.*$</packageUrl>
+     <cve>CVE-0000-00000</cve>
+  </suppress>
+-->
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+</suppressions>
