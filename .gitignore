@@ -1,0 +1,24 @@
+# Build output
+target/
+*.class
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Local configuration and secrets - NEVER commit these
+automation/config.env
+automation/secrets.env
+secrets/
+*.pem
+*.key
+kubeconfig*
+*-kubeconfig.yaml
+
+# Evidence captured by finsecure.sh (screenshots/logs for the report)
+evidence/
+
+# OS
+.DS_Store
+Thumbs.db
