@@ -61,6 +61,10 @@ t0_configure() {
   local dh_user
   dh_user="$(grep -E '^DOCKERHUB_USER=' "$CONFIG_FILE" | cut -d= -f2- | tr -d '"')"
   sed -i "s|^DOCKERHUB_REPO=.*|DOCKERHUB_REPO=\"${dh_user}/finsecure-pay\"|" "$CONFIG_FILE"
+  if [[ ! "$dh_user" =~ ^[a-z0-9]+([._-][a-z0-9]+)*$ ]]; then
+    warn "'$dh_user' does not look like a Docker Hub username (lowercase letters/numbers, no @)."
+    warn "Use the name shown on your Docker Hub profile, not your email. Run 0 -> 1 again to fix it."
+  fi
 
   sub "AWS / EKS"
   _prompt_var "$CONFIG_FILE" AWS_REGION "AWS region"

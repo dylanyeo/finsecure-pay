@@ -172,8 +172,11 @@ t4_rollback() {
   if [[ "${choice:-a}" == "b" ]]; then
     _need_jenkins
     sub "Recent image tags in Docker Hub"
-    curl -s "https://hub.docker.com/v2/repositories/${DOCKERHUB_REPO}/tags?page_size=15&ordering=last_updated" \
-      | jq -r '.results[].name' | grep -E -- '-b[0-9]+-' | head -n 10 | sed 's/^/  /'
+    curl -sL "https://hub.docker.com/v2/namespaces/${DOCKERHUB_USER}/repositories/finsecure-pay/tags?page_size=15&ordering=last_updated" 2>/dev/null \
+      | jq -r '.results[]?.name' 2>/dev/null | grep -E -- '-b[0-9]+-' | head -n 10 | sed 's/^/  /' || true
+    info "Tags deployed to the cluster so far (from rollout history):"
+    kubectl -n "$FS_NS" get rs -l app.kubernetes.io/name=finsecure-pay \
+      -o jsonpath='{range .items[*]}  {.spec.template.spec.containers[0].image}{"\n"}{end}' 2>/dev/null | sed 's|.*:|  |' | sort -u || true
     local tag prev n
     read -rp "Image tag to roll back to: " tag
     [[ -n "$tag" ]] || die "No tag entered."

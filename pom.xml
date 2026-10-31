@@ -13,7 +13,7 @@
 
     <groupId>com.finsecure</groupId>
     <artifactId>finsecure-pay</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <name>FinSecure Pay - Transaction Validation API</name>
     <description>Cloud-native transaction validation API for the FinSecure Pay DevOps capstone</description>
 
@@ -21,6 +21,8 @@
         <java.version>21</java.version>
         <!-- Latest Tomcat 10.1 patch: keeps the embedded server free of known CVEs -->
         <tomcat.version>10.1.61</tomcat.version>
+        <!-- Security: Jackson 2.21.7 fixes CVE-2026-89407, -89425, -68497, -91776, -91777 (DoS) -->
+        <jackson-bom.version>2.21.7</jackson-bom.version>
         <jacoco.version>0.8.15</jacoco.version>
         <dependency-check.version>12.1.0</dependency-check.version>
         <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>

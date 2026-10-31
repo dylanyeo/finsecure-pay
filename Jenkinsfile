@@ -174,7 +174,9 @@ pipeline {
                     # 1) Full report of all severities, kept as build evidence
                     $TRIVY image --no-progress --scanners vuln --format table --output "$WORKSPACE/trivy-report.txt" "$IMAGE"
                     # 2) SECURITY GATE: fail on any fixable HIGH or CRITICAL vulnerability
-                    $TRIVY image --no-progress --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE"
+                    #    Reviewed, time-limited exceptions live in .trivyignore (see docs/SECURITY-EXCEPTIONS.md)
+                    $TRIVY image --no-progress --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+                      --ignorefile "$WORKSPACE/.trivyignore" --exit-code 1 "$IMAGE"
                 '''
             }
             post {

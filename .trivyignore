@@ -1,0 +1,8 @@
+# Reviewed, time-limited security exceptions for the Trivy image gate.
+# Each entry is documented in docs/SECURITY-EXCEPTIONS.md and expires automatically
+# (after the exp: date Trivy reports the finding again and the build fails).
+
+# SEC-001 Spring Framework 6.2.19 XsltView path limitation - XsltView not used
+CVE-2026-47884 exp:2026-12-31
+# SEC-002 Spring Framework 6.2.19 SSE fragment stream corruption - SSE not used
+CVE-2026-47890 exp:2026-12-31

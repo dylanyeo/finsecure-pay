@@ -13,4 +13,16 @@
   </suppress>
 -->
 <suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+  <suppress until="2026-12-31Z">
+     <notes>Risk accepted (docs/SECURITY-EXCEPTIONS.md, SEC-001): CVE-2026-47884 needs Spring MVC XsltView, which this
+       service does not use. Open-source fix only in Spring Framework 7.0.9; upgrade to Spring Boot 4 planned.</notes>
+     <packageUrl regex="true">^pkg:maven/org\.springframework/spring\-.*@6\.2\..*$</packageUrl>
+     <cve>CVE-2026-47884</cve>
+  </suppress>
+  <suppress until="2026-12-31Z">
+     <notes>Risk accepted (docs/SECURITY-EXCEPTIONS.md, SEC-002): CVE-2026-47890 needs view fragments streamed over
+       Server-Sent Events, which this service does not use. Open-source fix only in Spring Framework 7.0.9.</notes>
+     <packageUrl regex="true">^pkg:maven/org\.springframework/spring\-.*@6\.2\..*$</packageUrl>
+     <cve>CVE-2026-47890</cve>
+  </suppress>
 </suppressions>
