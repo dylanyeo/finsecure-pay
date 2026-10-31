@@ -1,0 +1,14 @@
+.git
+.github
+target
+automation
+docs
+evidence
+secrets
+monitoring
+k8s
+*.md
+Jenkinsfile
+finsecure.sh
+.idea
+.vscode
