@@ -1,0 +1,42 @@
+# eksctl cluster definition - rendered by finsecure.sh (Task 3, step 1) with envsubst.
+#   eksctl create cluster -f <rendered file>
+# Design choices:
+#   * 2 managed worker nodes spread over 2 availability zones (survives one AZ/node failure)
+#   * Nodes in public subnets and NO NAT gateway: saves ~USD 1.50/day for this lab. In production the
+#     nodes would sit in private subnets behind NAT gateways (one per AZ).
+#   * Node role gets CloudWatch permissions so the CloudWatch Observability add-on can ship logs.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: ${EKS_CLUSTER}
+  region: ${AWS_REGION}
+  version: "${EKS_VERSION}"
+  tags:
+    project: finsecure-capstone
+
+vpc:
+  nat:
+    gateway: Disable
+  clusterEndpoints:
+    publicAccess: true
+    privateAccess: true
+
+managedNodeGroups:
+  - name: ng-default
+    instanceTypes: ["${EKS_INSTANCE_TYPE}"]
+    spot: ${EKS_SPOT}
+    desiredCapacity: ${EKS_NODE_COUNT}
+    minSize: 0
+    maxSize: 4
+    volumeSize: 20
+    volumeType: gp3
+    privateNetworking: false
+    labels:
+      role: general
+    tags:
+      project: finsecure-capstone
+    iam:
+      withAddonPolicies:
+        cloudWatch: true
+

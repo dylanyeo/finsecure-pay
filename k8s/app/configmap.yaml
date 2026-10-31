@@ -1,0 +1,17 @@
+# Environment-specific settings. Changing a value here and redeploying changes the
+# business rules without rebuilding the image (Spring Boot relaxed binding maps
+# FINSECURE_VALIDATION_MAXAMOUNT -> finsecure.validation.max-amount).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: finsecure-pay-config
+  namespace: finsecure
+  labels:
+    app.kubernetes.io/name: finsecure-pay
+data:
+  FINSECURE_ENVIRONMENT: "production"
+  FINSECURE_VALIDATION_MINAMOUNT: "0.01"
+  FINSECURE_VALIDATION_MAXAMOUNT: "10000.00"
+  FINSECURE_VALIDATION_SUPPORTEDCURRENCIES: "SGD,USD,EUR,MYR"
+  FINSECURE_VALIDATION_BLOCKEDACCOUNTS: "999999999999,888888888888"
+  LOGGING_LEVEL_COM_FINSECURE: "INFO"

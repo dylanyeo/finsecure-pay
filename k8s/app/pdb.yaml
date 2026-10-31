@@ -1,0 +1,11 @@
+# Keeps at least one pod running during voluntary disruptions such as node upgrades.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: finsecure-pay
+  namespace: finsecure
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: finsecure-pay

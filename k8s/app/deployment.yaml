@@ -1,0 +1,116 @@
+# Rendered by the pipeline / finsecure.sh with envsubst:
+#   ${IMAGE}            immutable image tag, e.g. user/finsecure-pay:1.1.0-b12-a1b2c3d
+#   ${BUILD_ID}         build number and git commit, shown by GET /health
+#   ${CONFIG_CHECKSUM}  hash of the ConfigMap, so a config change rolls the pods
+#   ${CHANGE_CAUSE}     recorded in "kubectl rollout history"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finsecure-pay
+  namespace: finsecure
+  labels:
+    app.kubernetes.io/name: finsecure-pay
+    app.kubernetes.io/part-of: finsecure-pay
+  annotations:
+    kubernetes.io/change-cause: "${CHANGE_CAUSE}"
+spec:
+  replicas: 2
+  revisionHistoryLimit: 10          # keeps old ReplicaSets so "kubectl rollout undo" works
+  progressDeadlineSeconds: 180      # a rollout that cannot become Ready within 3 min is marked failed
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0             # never drop below 2 ready pods during an update
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: finsecure-pay
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: finsecure-pay
+        app.kubernetes.io/part-of: finsecure-pay
+      annotations:
+        finsecure.io/config-checksum: "${CONFIG_CHECKSUM}"
+    spec:
+      automountServiceAccountToken: false   # the app never calls the Kubernetes API
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:            # spread replicas over nodes: one node failure keeps the service up
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: finsecure-pay
+      containers:
+        - name: app
+          image: ${IMAGE}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: finsecure-pay-config
+          env:
+            - name: FINSECURE_BUILD
+              value: "${BUILD_ID}"
+            - name: FINSECURE_APIKEY          # from a Kubernetes Secret - never in Git or the image
+              valueFrom:
+                secretKeyRef:
+                  name: finsecure-pay-secrets
+                  key: api-key
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+              ephemeral-storage: 100Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+              ephemeral-storage: 500Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          startupProbe:                       # gives the JVM up to 150 s to start before liveness applies
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:                      # restart the container if the app hangs
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:                     # only send traffic to pods that are ready
+            httpGet:
+              path: /actuator/health/readiness
+              port: management
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:                          # let the load balancer stop sending traffic before shutdown
+              exec:
+                command: ["sleep", "10"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 200Mi
