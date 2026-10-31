@@ -1,0 +1,86 @@
+# Helm values for prometheus-community/kube-prometheus-stack on AWS EKS.
+# Installed by: ./finsecure.sh 6  (release name "monitoring", namespace "monitoring")
+
+# EKS manages the control plane (etcd, scheduler, controller manager) and binds kube-proxy metrics
+# to localhost, so these targets cannot be scraped. Disabling them avoids false "target down" alerts.
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
+defaultRules:
+  rules:
+    etcd: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeControllerManager: false
+    kubeProxy: false
+
+prometheus:
+  prometheusSpec:
+    retention: 3d
+    # Pick up every ServiceMonitor / PrometheusRule in the cluster (e.g. in the finsecure namespace)
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        memory: 1536Mi
+
+alertmanager:
+  alertmanagerSpec:
+    # SMTP password is mounted from this Secret at /etc/alertmanager/secrets/alertmanager-smtp/
+    secrets:
+      - alertmanager-smtp
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+  config:
+    global:
+      resolve_timeout: 5m
+      smtp_smarthost: "smtp.gmail.com:587"
+      smtp_require_tls: true
+      smtp_from: "SMTP_USER_PLACEHOLDER"
+      smtp_auth_username: "SMTP_USER_PLACEHOLDER"
+      smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-smtp/password
+    route:
+      receiver: "null"
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 2m
+      repeat_interval: 1h
+      routes:
+        # Only FinSecure application alerts are emailed; platform noise goes to "null"
+        - receiver: finsecure-email
+          matchers:
+            - team = "finsecure"
+    inhibit_rules:
+      - source_matchers: ['severity = critical']
+        target_matchers: ['severity = warning']
+        equal: ['alertname', 'namespace']
+    receivers:
+      - name: "null"
+      - name: finsecure-email
+        email_configs:
+          - to: "NOTIFY_EMAIL_PLACEHOLDER"
+            send_resolved: true
+            headers:
+              Subject: '[{{ .Status | toUpper }}] FinSecure Pay alert: {{ .CommonLabels.alertname }}'
+    templates:
+      - "/etc/alertmanager/config/*.tmpl"
+
+grafana:
+  defaultDashboardsTimezone: Asia/Singapore
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  persistence:
+    enabled: false

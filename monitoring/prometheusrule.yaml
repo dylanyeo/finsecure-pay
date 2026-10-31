@@ -1,0 +1,66 @@
+# Alert rules for FinSecure Pay. The label team=finsecure routes them to email in Alertmanager.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: finsecure-pay-alerts
+  namespace: finsecure
+  labels:
+    app.kubernetes.io/name: finsecure-pay
+spec:
+  groups:
+    - name: finsecure-pay.rules
+      rules:
+        - alert: FinSecureHighRejectionRate
+          # More than 50% of transactions rejected over 2 minutes (with real traffic) -
+          # possible fraud attack, broken client integration or a bad rule change.
+          expr: |
+            (
+              sum(rate(finsecure_validations_total{namespace="finsecure",result="rejected"}[2m]))
+              /
+              clamp_min(sum(rate(finsecure_validations_total{namespace="finsecure"}[2m])), 0.001)
+            ) > 0.5
+            and
+            sum(rate(finsecure_validations_total{namespace="finsecure"}[2m])) > 0.1
+          for: 1m
+          labels:
+            severity: warning
+            team: finsecure
+          annotations:
+            summary: "High transaction rejection rate"
+            description: >-
+              {{ $value | humanizePercentage }} of transactions are being rejected.
+              Check recent deployments and ConfigMap changes, and the REJECTED rule codes in the logs.
+
+        - alert: FinSecureReplicasUnavailable
+          # Fewer than 2 ready pods - redundancy lost (pod crash, failed rollout, node failure).
+          expr: kube_deployment_status_replicas_available{namespace="finsecure",deployment="finsecure-pay"} < 2
+          for: 1m
+          labels:
+            severity: critical
+            team: finsecure
+          annotations:
+            summary: "FinSecure Pay has fewer than 2 ready pods"
+            description: "Only {{ $value }} pod(s) available. Check: kubectl -n finsecure get pods; kubectl -n finsecure describe deploy finsecure-pay"
+
+        - alert: FinSecureHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(http_server_requests_seconds_bucket{namespace="finsecure",uri="/validate"}[5m]))
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+            team: finsecure
+          annotations:
+            summary: "p95 latency of /validate above 500 ms"
+            description: "p95 latency is {{ $value | humanizeDuration }}."
+
+        - alert: FinSecureServerErrors
+          expr: sum(rate(http_server_requests_seconds_count{namespace="finsecure",status=~"5.."}[5m])) > 0
+          for: 2m
+          labels:
+            severity: critical
+            team: finsecure
+          annotations:
+            summary: "FinSecure Pay is returning HTTP 5xx errors"
+            description: "{{ $value | humanize }} errors per second. Check the application logs."

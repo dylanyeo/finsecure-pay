@@ -1,0 +1,19 @@
+# Tells Prometheus to scrape the app's /actuator/prometheus endpoint on the internal management port.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: finsecure-pay
+  namespace: finsecure
+  labels:
+    app.kubernetes.io/name: finsecure-pay
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: finsecure-pay
+      app.kubernetes.io/component: metrics
+  namespaceSelector:
+    matchNames: ["finsecure"]
+  endpoints:
+    - port: management
+      path: /actuator/prometheus
+      interval: 15s
