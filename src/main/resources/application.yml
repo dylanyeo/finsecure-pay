@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: finsecure-pay
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: 8080
+  shutdown: graceful            # finish in-flight requests before the pod stops
+
+finsecure:
+  environment: local
+  build: local
+  api-key: ""                   # set via the FINSECURE_APIKEY env var (Kubernetes Secret); empty = disabled
+  release:
+    simulate-unhealthy: false   # rollback demonstration only - keep false
+  validation:
+    min-amount: 0.01
+    max-amount: 10000.00
+    supported-currencies: SGD,USD,EUR,MYR
+    blocked-accounts: "999999999999,888888888888"
+    account-pattern: "^[0-9]{10,12}$"
+    max-future-skew-seconds: 300
+
+# Actuator runs on a separate management port (8081). It is reachable inside the cluster for probes
+# and Prometheus scraping, but is NOT exposed through the public load balancer.
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true           # /actuator/health/liveness and /actuator/health/readiness
+      group:
+        readiness:
+          include: readinessState,release
+  info:
+    build:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true   # enables p95/p99 latency panels in Grafana
+
+logging:
+  structured:
+    format:
+      console: ecs              # JSON logs in Elastic Common Schema - parsed by cloud logging / ELK
+  level:
+    com.finsecure: INFO
