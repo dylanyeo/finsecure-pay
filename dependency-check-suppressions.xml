@@ -25,4 +25,31 @@
      <packageUrl regex="true">^pkg:maven/org\.springframework/spring\-.*@6\.2\..*$</packageUrl>
      <cve>CVE-2026-47890</cve>
   </suppress>
+  <suppress until="2026-12-31Z">
+     <notes>Risk accepted (docs/SECURITY-EXCEPTIONS.md, SEC-003): Spring Framework 6.2.19 advisories that need features
+       this service does not use (WebFlux, RSocket, SpEL on user input, XSLT/FreeMarker views, SSE, URL redirect helpers,
+       property-path data binding). Open-source fixes only in Spring Framework 7.0.9; upgrade to Spring Boot 4 planned.</notes>
+     <packageUrl regex="true">^pkg:maven/org\.springframework/spring\-.*@6\.2\..*$</packageUrl>
+     <cve>CVE-2026-47883</cve>
+     <cve>CVE-2026-47885</cve>
+     <cve>CVE-2026-47886</cve>
+     <cve>CVE-2026-47887</cve>
+     <cve>CVE-2026-47888</cve>
+     <cve>CVE-2026-47889</cve>
+     <cve>CVE-2026-47891</cve>
+     <cve>CVE-2026-47892</cve>
+     <cve>CVE-2026-47893</cve>
+     <cve>CVE-2026-59280</cve>
+     <cve>CVE-2026-59281</cve>
+     <cve>CVE-2026-59282</cve>
+     <cve>CVE-2026-59283</cve>
+     <cve>CVE-2026-59313</cve>
+     <cve>CVE-2026-59314</cve>
+  </suppress>
+  <suppress until="2026-12-31Z">
+     <notes>False positive (SEC-004): CVE-2026-42154 is a denial of service in the Prometheus server's remote-read
+       endpoint (Go). It is matched to the Java Micrometer registry only through the generic CPE prometheus:prometheus.</notes>
+     <packageUrl regex="true">^pkg:maven/io\.micrometer/micrometer\-registry\-prometheus@.*$</packageUrl>
+     <cve>CVE-2026-42154</cve>
+  </suppress>
 </suppressions>

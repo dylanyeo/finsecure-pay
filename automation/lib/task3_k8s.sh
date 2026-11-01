@@ -106,12 +106,18 @@ t3_deploy() {
   version="$(app_version)"
   image="docker.io/${DOCKERHUB_REPO}:${version}"
   info "Deploying image $image (pushed in Task 2)"
+  kubectl get namespace "$FS_NS" >/dev/null 2>&1 \
+    || die "Namespace '$FS_NS' does not exist yet - run Task 3 step 2 first."
+  kubectl -n "$FS_NS" get secret finsecure-pay-secrets >/dev/null 2>&1 \
+    || die "App Secret missing - run Task 3 step 2 first."
 
-  kc apply -f "$ROOT/k8s/app/configmap.yaml" -f "$ROOT/k8s/app/service.yaml" -f "$ROOT/k8s/app/pdb.yaml"
+  kc apply -f "$ROOT/k8s/app/configmap.yaml" -f "$ROOT/k8s/app/service.yaml" -f "$ROOT/k8s/app/pdb.yaml" \
+    || die "kubectl apply failed - see the error above."
   mkdir -p "$SECRETS_DIR"
   render_deployment "$image" "manual-${version}" "Manual deploy ${version} (Task 3)" > "$SECRETS_DIR/rendered-deployment.yaml"
-  kc apply -f "$SECRETS_DIR/rendered-deployment.yaml"
-  kc rollout status deployment/"$FS_DEPLOY" --timeout=300s
+  kc apply -f "$SECRETS_DIR/rendered-deployment.yaml" || die "kubectl apply failed - see the error above."
+  kc rollout status deployment/"$FS_DEPLOY" --timeout=300s \
+    || die "Pods did not become ready - check: kubectl -n $FS_NS describe pods"
   kc get pods -o wide
 
   local ip
@@ -135,7 +141,7 @@ t3_evidence() {
   sub "ConfigMap values"
   kc get configmap finsecure-pay-config -o yaml
   sub "Endpoints behind the Service (only Ready pods receive traffic)"
-  kc get endpoints "$FS_SVC"
+  kc get endpointslices -l kubernetes.io/service-name="$FS_SVC" -o wide
   sub "Replicas spread across nodes and availability zones"
   kubectl -n "$FS_NS" get pods -o custom-columns=POD:.metadata.name,NODE:.spec.nodeName,READY:.status.containerStatuses[0].ready,RESTARTS:.status.containerStatuses[0].restartCount
   kubectl get nodes -L topology.kubernetes.io/zone

@@ -44,7 +44,7 @@ t4_provision() {
   info "EKS control plane is v${minor} - Jenkins gets a matching kubectl."
 
   info "You will be asked for your sudo password (BECOME password)."
-  (cd "$ANSIBLE_DIR" && run ansible-playbook site.yml --tags jenkins -K -e "kubectl_minor=${minor}")
+  (cd "$ANSIBLE_DIR" && run ansible-playbook site.yml --tags jenkins -K -e "jenkins_kubectl_minor=${minor}")
 
   ok "Jenkins: ${JENKINS_URL}  (user: ${JENKINS_ADMIN_USER}, password: automation/secrets.env)"
   hint "Everything (plugins, credentials, email, the pipeline job) is defined as code:"
