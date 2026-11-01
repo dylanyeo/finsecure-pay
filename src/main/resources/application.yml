@@ -13,7 +13,7 @@ finsecure:
   build: local
   api-key: ""                   # set via the FINSECURE_APIKEY env var (Kubernetes Secret); empty = disabled
   release:
-    simulate-unhealthy: false   # rollback demonstration only - keep false
+    simulate-unhealthy: true   # rollback demonstration only - keep false
   validation:
     min-amount: 0.01
     max-amount: 10000.00
