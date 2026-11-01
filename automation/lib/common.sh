@@ -43,8 +43,9 @@ sub()    { printf '\n%s\n' "${C_BOLD}--- $* ---${C_RESET}"; }
 hint()   { printf '%s\n' "${C_DIM}    $*${C_RESET}"; }
 
 # Print a command, then run it (shows exactly what is executed - useful for screenshots)
+# The echo goes to stderr so it never ends up inside a pipe (e.g. "run kubectl ... | kubectl apply -f -").
 run() {
-  printf '%s\n' "${C_DIM}\$ $*${C_RESET}"
+  printf '%s\n' "${C_DIM}\$ $*${C_RESET}" >&2
   "$@"
 }
 
@@ -240,16 +241,16 @@ wait_for_health() {
 _jenkins_auth() { printf 'user = "%s:%s"\n' "$JENKINS_ADMIN_USER" "$JENKINS_ADMIN_PASSWORD"; }
 
 jenkins_get() {
-  _jenkins_auth | curl -fsS -K - "${JENKINS_LOCAL}$1"
+  _jenkins_auth | curl -gfsS -K - "${JENKINS_LOCAL}$1"
 }
 
 jenkins_post() {
   local jar crumb
   mkdir -p "$SECRETS_DIR"
   jar="$SECRETS_DIR/.jenkins-cookies"
-  crumb="$(_jenkins_auth | curl -fsS -K - -c "$jar" "${JENKINS_LOCAL}/crumbIssuer/api/json" \
+  crumb="$(_jenkins_auth | curl -gfsS -K - -c "$jar" "${JENKINS_LOCAL}/crumbIssuer/api/json" \
            | jq -r '.crumbRequestField + ":" + .crumb')"
-  _jenkins_auth | curl -fsS -K - -b "$jar" -H "$crumb" -X POST "${JENKINS_LOCAL}$1"
+  _jenkins_auth | curl -gfsS -K - -b "$jar" -H "$crumb" -X POST "${JENKINS_LOCAL}$1"
   rm -f "$jar"
 }
 

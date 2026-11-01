@@ -27,14 +27,16 @@ t6_install() {
   require_vars SMTP_USER SMTP_PASSWORD NOTIFY_EMAIL GRAFANA_ADMIN_PASSWORD
   require_cmd helm
   ensure_cluster_creds
-  run kubectl create namespace "$FS_MON_NS" --dry-run=client -o yaml | kubectl apply -f -
+  kubectl create namespace "$FS_MON_NS" --dry-run=client -o yaml | kubectl apply -f - \
+    || die "Could not create namespace $FS_MON_NS."
 
   sub "Secrets for Grafana admin and Alertmanager SMTP (from secrets.env)"
   kubectl -n "$FS_MON_NS" create secret generic grafana-admin \
     --from-literal=admin-user=admin --from-literal=admin-password="$GRAFANA_ADMIN_PASSWORD" \
-    --dry-run=client -o yaml | kubectl apply -f -
+    --dry-run=client -o yaml | kubectl apply -f - || die "Could not create the Grafana admin Secret."
   kubectl -n "$FS_MON_NS" create secret generic alertmanager-smtp \
-    --from-literal=password="$SMTP_PASSWORD" --dry-run=client -o yaml | kubectl apply -f -
+    --from-literal=password="$SMTP_PASSWORD" --dry-run=client -o yaml | kubectl apply -f - \
+    || die "Could not create the Alertmanager SMTP Secret."
   run kubectl -n "$FS_MON_NS" get secrets grafana-admin alertmanager-smtp
 
   mkdir -p "$SECRETS_DIR"
@@ -45,7 +47,8 @@ t6_install() {
   run helm repo update prometheus-community
   run helm upgrade --install "$FS_MON_RELEASE" prometheus-community/kube-prometheus-stack \
     --version "$KPS_CHART_VERSION" --namespace "$FS_MON_NS" \
-    -f "$SECRETS_DIR/kps-values.rendered.yaml" --wait --timeout 15m
+    -f "$SECRETS_DIR/kps-values.rendered.yaml" --wait --timeout 15m \
+    || die "Helm install failed - see the error above (rerun this step; it is safe to repeat)."
   run kubectl -n "$FS_MON_NS" get pods
   ok "Monitoring stack installed."
 }
